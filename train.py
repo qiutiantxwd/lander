@@ -1,6 +1,7 @@
 import os
 import random
 from collections import deque, namedtuple
+from datetime import datetime
 
 import gymnasium as gym
 from gymnasium.wrappers import RecordVideo
@@ -9,9 +10,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import argparse
 
 # ── Hyperparameters ──────────────────────────────────────────────────────────
-EPISODES = 800
 GAMMA = 0.99
 LR = 1e-4
 BATCH_SIZE = 64
@@ -23,7 +24,7 @@ EPS_DECAY = 0.995
 TARGET_UPDATE_FREQ = 10        # episodes between hard target-net updates
 HIDDEN_SIZE = 128
 SEED = 42
-VIDEO_DIR = "./videos"
+VIDEO_DIR = f"./videos/{datetime.now().strftime('%m%d_%H%M')}"
 FIGURES_DIR = "./figures"
 
 # ── Reproducibility ──────────────────────────────────────────────────────────
@@ -115,7 +116,7 @@ class DQNAgent:
         self.epsilon = max(EPS_END, self.epsilon * EPS_DECAY)
 
 # ── Training Loop ────────────────────────────────────────────────────────────
-def main():
+def main(args):
     os.makedirs(VIDEO_DIR, exist_ok=True)
     os.makedirs(FIGURES_DIR, exist_ok=True)
 
@@ -132,7 +133,7 @@ def main():
     episode_rewards = []
     episode_durations = []
 
-    for ep in range(EPISODES):
+    for ep in range(args.EPISODES):
         state, _ = env.reset(seed=SEED + ep)
         total_reward = 0.0
         steps = 0
@@ -163,9 +164,9 @@ def main():
         # Rolling average of last 100 episodes
         avg_reward = np.mean(episode_rewards[-100:])
 
-        if ep % 25 == 0 or ep == EPISODES - 1:
+        if ep % 25 == 0 or ep == args.EPISODES - 1:
             print(
-                f"Episode {ep:4d}/{EPISODES} | "
+                f"Episode {ep:4d}/{args.EPISODES} | "
                 f"Reward: {total_reward:7.1f} | "
                 f"Avg100: {avg_reward:7.1f} | "
                 f"Eps: {agent.epsilon:.3f}"
@@ -185,4 +186,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--EPISODES", type=int, default=500)
+    args = parser.parse_args()
+    main(args)
