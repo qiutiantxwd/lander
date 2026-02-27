@@ -12,10 +12,10 @@ import torch.nn.functional as F
 import torch.optim as optim
 import argparse
 
+from plots import plot_training_graphs, plot_eval_histograms
 # ── Hyperparameters ──────────────────────────────────────────────────────────
 GAMMA = 0.99
 LR = 1e-4
-BATCH_SIZE = 64
 REPLAY_BUFFER_SIZE = 100_000
 MIN_BUFFER_SIZE = 1_000
 EPS_START = 1.0
@@ -24,8 +24,9 @@ EPS_DECAY = 0.995
 TARGET_UPDATE_FREQ = 10        # episodes between hard target-net updates
 HIDDEN_SIZE = 128
 SEED = 42
-VIDEO_DIR = f"./videos/{datetime.now().strftime('%m%d_%H%M')}"
-FIGURES_DIR = "./figures"
+EXP_FOLDER = f"./exp/{datetime.now().strftime('%m%d_%H%M')}" 
+VIDEO_DIR = f"{EXP_FOLDER}/videos"
+FIGURES_DIR = f"{EXP_FOLDER}/figures"
 
 # ── Reproducibility ──────────────────────────────────────────────────────────
 random.seed(SEED)
@@ -71,11 +72,12 @@ class ReplayBuffer:
 
 # ── Agent ────────────────────────────────────────────────────────────────────
 class DQNAgent:
-    def __init__(self):
+    def __init__(self, bs):
         self.policy_net = QNetwork().to(device)
         self.target_net = QNetwork().to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
+        self.bs = bs
 
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LR)
         self.replay_buffer = ReplayBuffer(REPLAY_BUFFER_SIZE)
@@ -92,7 +94,7 @@ class DQNAgent:
         if len(self.replay_buffer) < MIN_BUFFER_SIZE:
             return None
 
-        states, actions, rewards, next_states, dones = self.replay_buffer.sample(BATCH_SIZE)
+        states, actions, rewards, next_states, dones = self.replay_buffer.sample(self.bs)
 
         # Current Q-values for chosen actions
         q_values = self.policy_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)
@@ -128,10 +130,12 @@ def main(args):
         name_prefix="lunar-lander",
     )
 
-    agent = DQNAgent()
+    agent = DQNAgent(args.bs)
 
     episode_rewards = []
     episode_durations = []
+
+    log_file = open(f"{EXP_FOLDER}/train.log", "w")
 
     for ep in range(args.EPISODES):
         state, _ = env.reset(seed=SEED + ep)
@@ -165,19 +169,23 @@ def main(args):
         avg_reward = np.mean(episode_rewards[-100:])
 
         if ep % 25 == 0 or ep == args.EPISODES - 1:
-            print(
+            msg = (
                 f"Episode {ep:4d}/{args.EPISODES} | "
                 f"Reward: {total_reward:7.1f} | "
                 f"Avg100: {avg_reward:7.1f} | "
                 f"Eps: {agent.epsilon:.3f}"
             )
+            print(msg)
+            log_file.write(msg + "\n")
+            log_file.flush()
 
+    log_file.close()
     env.close()
 
     # Save model and metrics
-    torch.save(agent.policy_net.state_dict(), "dqn_lunar_lander.pth")
-    np.save("episode_rewards.npy", np.array(episode_rewards))
-    np.save("episode_durations.npy", np.array(episode_durations))
+    torch.save(agent.policy_net.state_dict(), f"{EXP_FOLDER}/dqn_lunar_lander.pth")
+    np.save(f"{EXP_FOLDER}/episode_rewards.npy", np.array(episode_rewards))
+    np.save(f"{EXP_FOLDER}/episode_durations.npy", np.array(episode_durations))
 
     print("\n✓ Training complete.")
     print(f"  Model saved to dqn_lunar_lander.pth")
@@ -187,6 +195,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--EPISODES", type=int, default=500)
+    parser.add_argument("--EPISODES", type=int, default=600)
+    parser.add_argument("--bs", type=int, default=128)
     args = parser.parse_args()
     main(args)
