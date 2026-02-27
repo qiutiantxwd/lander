@@ -22,9 +22,15 @@ EPS_START = 1.0
 EPS_END = 0.01
 EPS_DECAY = 0.995
 TARGET_UPDATE_FREQ = 10        # episodes between hard target-net updates
-HIDDEN_SIZE = 128
+TRAIN_EVERY = 4                # env steps between gradient updates
+GRAD_STEPS_PER_UPDATE = 2      # gradient steps each time we train
+HIDDEN_SIZE = 256
 SEED = 42
-EXP_FOLDER = f"./exp/{datetime.now().strftime('%m%d_%H%M')}" 
+debug = True
+if debug:
+    EXP_FOLDER = "./exp" 
+else:
+    EXP_FOLDER = f"./exp/{datetime.now().strftime('%m%d_%H%M')}" 
 VIDEO_DIR = f"{EXP_FOLDER}/videos"
 FIGURES_DIR = f"{EXP_FOLDER}/figures"
 
@@ -104,7 +110,8 @@ class DQNAgent:
             next_q_values = self.target_net(next_states).max(dim=1)[0]
             targets = rewards + GAMMA * next_q_values * (1.0 - dones)
 
-        loss = F.mse_loss(q_values, targets)
+        # loss = F.mse_loss(q_values, targets)
+        loss = F.smooth_l1_loss(q_values, targets)
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -126,7 +133,7 @@ def main(args):
     env = RecordVideo(
         env,
         video_folder=VIDEO_DIR,
-        episode_trigger=lambda ep: ep % 25 == 0,
+        episode_trigger=lambda ep: ep % 25 == 0 or ep == args.EPISODES - 1,
         name_prefix="lunar-lander",
     )
 
@@ -136,6 +143,8 @@ def main(args):
     episode_durations = []
 
     log_file = open(f"{EXP_FOLDER}/train.log", "w")
+
+    step_count = 0
 
     for ep in range(args.EPISODES):
         state, _ = env.reset(seed=SEED + ep)
@@ -148,7 +157,10 @@ def main(args):
             done = terminated or truncated
 
             agent.replay_buffer.push(state, action, reward, next_state, float(done))
-            agent.train_step()
+            step_count += 1
+            if step_count % TRAIN_EVERY == 0:
+                for _ in range(GRAD_STEPS_PER_UPDATE):
+                    agent.train_step()
 
             state = next_state
             total_reward += reward
@@ -196,6 +208,6 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--EPISODES", type=int, default=600)
-    parser.add_argument("--bs", type=int, default=128)
+    parser.add_argument("--bs", type=int, default=512)
     args = parser.parse_args()
     main(args)
