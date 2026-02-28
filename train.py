@@ -21,18 +21,18 @@ MIN_BUFFER_SIZE = 1_000
 EPS_START = 1.0
 EPS_END = 0.01
 EPS_DECAY = 0.995
-TARGET_UPDATE_FREQ = 10        # episodes between hard target-net updates
+TAU = 0.005                    # soft target update rate
 TRAIN_EVERY = 4                # env steps between gradient updates
 GRAD_STEPS_PER_UPDATE = 2      # gradient steps each time we train
 HIDDEN_SIZE = 256
 SEED = 42
-debug = True
-if debug:
-    EXP_FOLDER = "./exp" 
-else:
-    EXP_FOLDER = f"./exp/{datetime.now().strftime('%m%d_%H%M')}" 
-VIDEO_DIR = f"{EXP_FOLDER}/videos"
-FIGURES_DIR = f"{EXP_FOLDER}/figures"
+# debug = False
+# if debug:
+#     EXP_FOLDER = "./exp" 
+# else:
+#     EXP_FOLDER = f"./exp/{datetime.now().strftime('%m%d_%H%M')}" 
+# VIDEO_DIR = f"{EXP_FOLDER}/videos"
+# FIGURES_DIR = f"{EXP_FOLDER}/figures"
 
 # ── Reproducibility ──────────────────────────────────────────────────────────
 random.seed(SEED)
@@ -119,13 +119,22 @@ class DQNAgent:
         return loss.item()
 
     def update_target(self):
-        self.target_net.load_state_dict(self.policy_net.state_dict())
+        for tp, pp in zip(self.target_net.parameters(), self.policy_net.parameters()):
+            tp.data.copy_(TAU * pp.data + (1.0 - TAU) * tp.data)
 
     def decay_epsilon(self):
         self.epsilon = max(EPS_END, self.epsilon * EPS_DECAY)
 
 # ── Training Loop ────────────────────────────────────────────────────────────
 def main(args):
+    if args.exp == None:
+        EXP_FOLDER = "./exp/debug"
+    else:
+        EXP_FOLDER = f"./exp/{args.exp}" 
+
+    VIDEO_DIR = f"{EXP_FOLDER}/videos"
+    FIGURES_DIR = f"{EXP_FOLDER}/figures"
+
     os.makedirs(VIDEO_DIR, exist_ok=True)
     os.makedirs(FIGURES_DIR, exist_ok=True)
 
@@ -161,6 +170,7 @@ def main(args):
             if step_count % TRAIN_EVERY == 0:
                 for _ in range(GRAD_STEPS_PER_UPDATE):
                     agent.train_step()
+                    agent.update_target()
 
             state = next_state
             total_reward += reward
@@ -171,16 +181,13 @@ def main(args):
 
         agent.decay_epsilon()
 
-        if ep % TARGET_UPDATE_FREQ == 0:
-            agent.update_target()
-
         episode_rewards.append(total_reward)
         episode_durations.append(steps)
 
         # Rolling average of last 100 episodes
         avg_reward = np.mean(episode_rewards[-100:])
 
-        if ep % 25 == 0 or ep == args.EPISODES - 1:
+        if (ep>0 and ep % 25 == 0) or ep == args.EPISODES - 1:
             msg = (
                 f"Episode {ep:4d}/{args.EPISODES} | "
                 f"Reward: {total_reward:7.1f} | "
@@ -209,5 +216,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--EPISODES", type=int, default=600)
     parser.add_argument("--bs", type=int, default=512)
+    parser.add_argument("--exp", type=str, default=None)
     args = parser.parse_args()
     main(args)

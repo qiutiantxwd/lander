@@ -1,9 +1,10 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import argparse
 
-FIGURES_DIR = "./figures"
-os.makedirs(FIGURES_DIR, exist_ok=True)
+# FIGURES_DIR = "./figures"
+# os.makedirs(FIGURES_DIR, exist_ok=True)
 
 
 def rolling_average(data, window=100):
@@ -11,10 +12,12 @@ def rolling_average(data, window=100):
     return np.convolve(data, np.ones(window) / window, mode="valid")
 
 
-def plot_training_graphs():
+def plot_training_graphs(args):
     """Generate reward and duration vs. episode training plots (Report Item 2)."""
-    rewards = np.load("episode_rewards.npy")
-    durations = np.load("episode_durations.npy")
+    EXP_DIR = f"./exp/{args.EXP}"
+    FIGURES_DIR = f"./exp/{args.EXP}/figures"
+    rewards = np.load(f"{EXP_DIR}/episode_rewards.npy")
+    durations = np.load(f"{EXP_DIR}/episode_durations.npy")
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
 
@@ -47,10 +50,12 @@ def plot_training_graphs():
     plt.show()
 
 
-def plot_eval_histograms():
+def plot_eval_histograms(args):
     """Generate evaluation reward and duration histograms (Report Item 4)."""
-    eval_rewards = np.load("eval_rewards.npy")
-    eval_durations = np.load("eval_durations.npy")
+    EXP_DIR = f"./exp/{args.EXP}"
+    FIGURES_DIR = f"{EXP_DIR}/figures"
+    eval_rewards = np.load(f"{EXP_DIR}/eval_rewards.npy")
+    eval_durations = np.load(f"{EXP_DIR}/eval_durations.npy")
 
     mean_r = np.mean(eval_rewards)
     mean_d = np.mean(eval_durations)
@@ -83,8 +88,11 @@ def plot_eval_histograms():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--EXP", type=str)
+    args = parser.parse_args()
     print("Generating training graphs...")
-    plot_training_graphs()
+    plot_training_graphs(args)
 
-    print("\nGenerating evaluation histograms...")
-    plot_eval_histograms()
+    # print("\nGenerating evaluation histograms...")
+    # plot_eval_histograms(args)
